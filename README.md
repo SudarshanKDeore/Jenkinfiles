@@ -1,4 +1,4 @@
-##Used parameters:
+## Used parameters:
 
 ```
 ENV (dev / preprod / prod)
@@ -9,8 +9,8 @@ DEPLOY (true/false)
 DOCKER_IMAGE (image name)
 ```
 
-##How this works in production:
-##When you click Build with Parameters, Jenkins asks:
+## How this works in production:
+## When you click Build with Parameters, Jenkins asks:
 ```
 ENV → dev / preprod / prod
 BRANCH → which branch to build
@@ -20,7 +20,7 @@ DEPLOY → deploy or just build
 DOCKER_IMAGE → image name
 ```
 
-##Typical production usage:
+## Typical production usage:
 ```
 | Scenario        | Values                                    |
 | --------------- | ----------------------------------------- |
@@ -30,7 +30,7 @@ DOCKER_IMAGE → image name
 | Prod release    | ENV=prod, RUN_TESTS=false, VERSION=stable |
 ```
 
-##Interview one-liner:
+## Interview one-liner:
 ```
 “In production Jenkins pipelines we use parameterized builds to select environment, branch, version, and deployment flags at runtime. This gives flexibility and control without changing the Jenkinsfile.”
 ```
