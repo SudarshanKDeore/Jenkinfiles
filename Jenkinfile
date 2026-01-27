@@ -1,0 +1,119 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'ENV',
+            choices: ['dev', 'preprod', 'prod'],
+            description: 'Select target environment'
+        )
+
+        string(
+            name: 'BRANCH',
+            defaultValue: 'main',
+            description: 'Git branch to build'
+        )
+
+        string(
+            name: 'VERSION',
+            defaultValue: 'latest',
+            description: 'Application version or Docker tag'
+        )
+
+        booleanParam(
+            name: 'RUN_TESTS',
+            defaultValue: true,
+            description: 'Run unit tests'
+        )
+
+        booleanParam(
+            name: 'DEPLOY',
+            defaultValue: true,
+            description: 'Deploy after successful build'
+        )
+
+        string(
+            name: 'DOCKER_IMAGE',
+            defaultValue: 'myorg/applicationmgmt-service',
+            description: 'Docker image name'
+        )
+    }
+
+    environment {
+        REGISTRY = "docker.io"
+        KUBE_CONTEXT = "eks-cluster"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: "${params.BRANCH}",
+                    url: 'https://github.com/myorg/applicationmgmt-service.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "Building application..."
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Unit Tests') {
+            when {
+                expression { params.RUN_TESTS == true }
+            }
+            steps {
+                echo "Running unit tests..."
+                sh 'mvn test'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                echo "Building Docker image..."
+                sh """
+                docker build -t ${params.DOCKER_IMAGE}:${params.VERSION} .
+                """
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                echo "Pushing Docker image to registry..."
+                sh """
+                docker tag ${params.DOCKER_IMAGE}:${params.VERSION} ${REGISTRY}/${params.DOCKER_IMAGE}:${params.VERSION}
+                docker push ${REGISTRY}/${params.DOCKER_IMAGE}:${params.VERSION}
+                """
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            when {
+                expression { params.DEPLOY == true }
+            }
+            steps {
+                echo "Deploying to ${params.ENV} environment..."
+                sh """
+                kubectl config use-context ${KUBE_CONTEXT}
+                kubectl set image deployment/applicationmgmt-service \
+                applicationmgmt-service=${REGISTRY}/${params.DOCKER_IMAGE}:${params.VERSION} \
+                -n ${params.ENV}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline executed successfully for ENV=${params.ENV}, VERSION=${params.VERSION}"
+        }
+        failure {
+            echo "Pipeline failed for ENV=${params.ENV}"
+        }
+        always {
+            echo "Pipeline execution finished."
+        }
+    }
+}
