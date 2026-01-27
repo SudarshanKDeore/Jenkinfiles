@@ -36,3 +36,15 @@ DOCKER_IMAGE → image name
               branch, version, and deployment flags at runtime.
 This gives flexibility and control without changing the Jenkinsfile.”
 ```
+
+## SNS Body:
+```
+Subject: Jenkins SUCCESS: applicationmgmt-pipeline
+
+Job: applicationmgmt-pipeline
+Build: #45
+Status: SUCCESS
+Environment: prod
+Version: 1.2.3
+URL: http://jenkins/job/applicationmgmt-pipeline/45/
+```
