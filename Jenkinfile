@@ -116,4 +116,53 @@ pipeline {
             echo "Pipeline execution finished."
         }
     }
+
+    post {
+    success {
+        echo "Pipeline executed successfully for ENV=${params.ENV}, VERSION=${params.VERSION}"
+        sh """
+        aws sns publish \
+          --topic-arn arn:aws:sns:ap-south-1:123456789012:jenkins-build-alerts \
+          --subject "Jenkins SUCCESS: ${env.JOB_NAME}" \
+          --message "Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Status: SUCCESS
+Environment: ${params.ENV}
+Version: ${params.VERSION}
+URL: ${env.BUILD_URL}"
+        """
+    }
+
+    failure {
+        echo "Pipeline failed for ENV=${params.ENV}"
+        sh """
+        aws sns publish \
+          --topic-arn arn:aws:sns:ap-south-1:123456789012:jenkins-build-alerts \
+          --subject "Jenkins FAILURE: ${env.JOB_NAME}" \
+          --message "Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Status: FAILURE
+Environment: ${params.ENV}
+Check logs: ${env.BUILD_URL}"
+        """
+    }
+
+    unstable {
+        sh """
+        aws sns publish \
+          --topic-arn arn:aws:sns:ap-south-1:123456789012:jenkins-build-alerts \
+          --subject "Jenkins UNSTABLE: ${env.JOB_NAME}" \
+          --message "Job: ${env.JOB_NAME}
+Build: #${env.BUILD_NUMBER}
+Status: UNSTABLE
+Environment: ${params.ENV}
+URL: ${env.BUILD_URL}"
+        """
+    }
+
+    always {
+        echo "Pipeline execution finished."
+    }
+}
+
 }
