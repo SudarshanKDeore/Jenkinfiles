@@ -32,5 +32,7 @@ DOCKER_IMAGE → image name
 
 ## Interview one-liner:
 ```
-“In production Jenkins pipelines we use parameterized builds to select environment, branch, version, and deployment flags at runtime. This gives flexibility and control without changing the Jenkinsfile.”
+“In production Jenkins pipelines we use parameterized builds to select environment,
+              branch, version, and deployment flags at runtime.
+This gives flexibility and control without changing the Jenkinsfile.”
 ```
