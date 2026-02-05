@@ -1,0 +1,174 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'BRANCH',
+            choices: ['main', 'dev', 'pre-prod'],
+            description: 'Git branch to build'
+        )
+
+        choice(
+            name: 'ENV',
+            choices: ['dev', 'preprod', 'prod'],
+            description: 'Target environment for deployment'
+        )
+
+        booleanParam(
+            name: 'RUN_TESTS',
+            defaultValue: true,
+            description: 'Run unit tests'
+        )
+    }
+
+    environment {
+        APP_NAME        = "myapp"
+        IMAGE_TAG       = "${BUILD_NUMBER}"
+        DOCKERHUB_REPO  = "sudarshan/myapp"
+        REGISTRY_CRED  = "dockerhub-creds"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git branch: "${params.BRANCH}",
+                    url: 'https://github.com/myorg/applicationmgmt-service.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Unit Tests') {
+            when {
+                expression { params.RUN_TESTS }
+            }
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh """
+                  docker build -t ${DOCKERHUB_REPO}:${IMAGE_TAG} .
+                """
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: "${REGISTRY_CRED}",
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    sh """
+                      docker login -u $USER -p $PASS
+                      docker push ${DOCKERHUB_REPO}:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+        stage('Trigger CD Pipeline') {
+            steps {
+                build job: 'myapp-CD',
+                    parameters: [
+                        string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}"),
+                        string(name: 'ENV', value: "${params.ENV}")
+                    ]
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "CI pipeline completed successfully"
+        }
+        failure {
+            echo "CI pipeline failed"
+        }
+    }
+}
+
+------------------------------------------------------------------------------
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'ENV',
+            choices: ['dev', 'preprod', 'prod'],
+            description: 'Deployment environment'
+        )
+
+        string(
+            name: 'IMAGE_TAG',
+            description: 'Docker image tag from CI'
+        )
+    }
+
+    environment {
+        APP_NAME       = "myapp"
+        DOCKERHUB_REPO = "sudarshan/myapp"
+    }
+
+    stages {
+
+        stage('Select Kubernetes Cluster') {
+            steps {
+                script {
+                    if (params.ENV == 'dev') {
+                        sh 'kubectl config use-context dev-eks-cluster'
+                    } else if (params.ENV == 'preprod') {
+                        sh 'kubectl config use-context preprod-eks-cluster'
+                    } else if (params.ENV == 'prod') {
+                        sh 'kubectl config use-context prod-eks-cluster'
+                    }
+                }
+            }
+        }
+
+        stage('Approve Production Deployment') {
+            when {
+                expression { params.ENV == 'prod' }
+            }
+            steps {
+                input message: "Approve deployment to PROD?"
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh """
+                  kubectl set image deployment/${APP_NAME} \
+                  ${APP_NAME}=${DOCKERHUB_REPO}:${IMAGE_TAG} \
+                  -n ${params.ENV}
+                """
+            }
+        }
+
+        stage('Verify Rollout') {
+            steps {
+                sh """
+                  kubectl rollout status deployment/${APP_NAME} -n ${params.ENV}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment successful to ${params.ENV}"
+        }
+        failure {
+            echo "Deployment failed"
+        }
+    }
+}
